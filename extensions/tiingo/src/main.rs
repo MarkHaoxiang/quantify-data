@@ -1,3 +1,5 @@
+use tiingo;
+
 fn main() {
-    println!("Hello, world!");
+    println!("{}", tiingo::get_api_key())
 }
