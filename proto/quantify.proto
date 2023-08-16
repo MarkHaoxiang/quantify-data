@@ -1,0 +1,27 @@
+syntax = "proto3";
+package quantify;
+
+// Data types
+message Ticker {
+    string name = 1;
+}
+
+message StatusResponse {
+    bool success = 1;
+    optional string info = 2;
+}
+
+// Messages
+message AddTickerRequest {
+    Ticker ticker = 1;
+}
+
+message RemoveTickerRequest {
+    Ticker ticker = 1;
+}
+
+// Service
+service QuantifyData {
+    rpc AddTicker (AddTickerRequest) returns (StatusResponse) {};
+    rpc RemoveTicker (RemoveTickerRequest) returns (StatusResponse) {};
+}

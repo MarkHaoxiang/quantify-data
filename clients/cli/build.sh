@@ -1,0 +1,1 @@
+python -m grpc_tools.protoc -I../../proto --python_out=target --pyi_out=target --grpc_python_out=target ../../proto/quantify.proto
