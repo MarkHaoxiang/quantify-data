@@ -10,4 +10,5 @@ chrono = "0.4.26"
 csv = "1.2.2"
 futures = "0.3.28"
 reqwest = {version="0.11", features=["json"]}
+serde_json = "1.0.105"
 tokio = {version="1.29", features=["full"]}

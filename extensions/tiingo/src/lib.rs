@@ -1,9 +1,11 @@
 use std::env;
 use eod::get_eod;
+use meta::get_metadata;
 use reqwest::Client;
-use chrono::{prelude::DateTime, Utc};
+use chrono::NaiveDate;
 
 mod eod;
+mod meta;
 
 pub struct TiingoRESTClient {
     web_client: Client,
@@ -17,11 +19,19 @@ impl Default for TiingoRESTClient {
 }
 
 impl TiingoRESTClient {
+
+    pub async fn get_metadata(
+        &self,
+        ticker: &str) -> meta::Metadata
+    {
+        get_metadata(ticker, &self.web_client, &self.api_key).await
+    }
+
     pub async fn get_eod(
         &self,
         ticker: &str,
-        start_date: &Option<DateTime<Utc>>,
-        end_date: &Option<DateTime<Utc>>,
+        start_date: &Option<NaiveDate>,
+        end_date: &Option<NaiveDate>,
         resample_freq: &Option<eod::ResampleFreq>) -> Vec<eod::EoD> 
     {
         get_eod(ticker, &self.web_client, &self.api_key, start_date, end_date, resample_freq).await
@@ -39,9 +49,7 @@ pub fn get_api_key() -> String {
 #[cfg(test)]
 mod tests {
     use reqwest::Client;
-    use chrono::prelude::Utc;
-    use chrono::TimeZone;
-    use crate::eod::{get_eod, ResampleFreq, EoD};
+    use crate::{eod::{get_eod, ResampleFreq, EoD}, meta::{get_metadata, Metadata}};
     use super::*;
 
     #[test]
@@ -52,10 +60,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_eod_call() {
+    async fn test_rest_api() {
         let client = Client::new();
-        let test_start = Utc.with_ymd_and_hms(2014, 1, 1, 16, 0, 0).unwrap();
-        let test_end = Utc.with_ymd_and_hms(2014, 1, 2, 16, 0, 0).unwrap();
+        // Metadata
+        let fetched_result = get_metadata("GOOGL", &client, &get_api_key()).await;
+        assert_eq!(fetched_result.ticker, "GOOGL");
+        assert_eq!(fetched_result.name, "Alphabet Inc - Class A");
+
+        // EoD
+        let test_start = NaiveDate::from_ymd_opt(2014, 1, 1).unwrap();
+        let test_end = NaiveDate::from_ymd_opt(2014, 1, 2).unwrap(); 
 
         let fetched_result = get_eod(
             "GOOGL",
@@ -68,7 +82,7 @@ mod tests {
 
         let correct_result = EoD
             {
-                date: Utc.with_ymd_and_hms(2014, 1, 2, 0, 0, 0).unwrap(),
+                date: NaiveDate::from_ymd_opt(2014, 1, 2).unwrap(),
                 open: 1115.46,
                 high: 1117.75,
                 low: 1108.26,

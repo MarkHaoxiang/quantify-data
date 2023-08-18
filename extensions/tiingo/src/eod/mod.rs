@@ -1,7 +1,7 @@
 use core::fmt;
 use std::option::Option;
 
-use chrono::{prelude::DateTime, Utc};
+use chrono::NaiveDate;
 use reqwest::Client;
 
 // TODO
@@ -11,7 +11,7 @@ use reqwest::Client;
 // https://www.tiingo.com/documentation/end-of-day
 pub struct EoD {
     // The date this data pertains to
-    pub date: DateTime<Utc>,
+    pub date: NaiveDate,
     // The opening price for the asset on the given day
     pub open: f64,
     // The high price for the asset on the given date
@@ -89,8 +89,8 @@ pub(super) async fn get_eod (
     ticker: &str,
     client: &Client,
     api_key: &str,
-    start_date: &Option<DateTime<Utc>>,
-    end_date: &Option<DateTime<Utc>>,
+    start_date: &Option<NaiveDate>,
+    end_date: &Option<NaiveDate>,
     resample_freq: &Option<ResampleFreq>
 ) -> Vec<EoD> {
     // Construct request
@@ -149,7 +149,7 @@ pub(super) async fn get_eod (
             let data: Vec<&str> = data.collect();
 
             let date_string = data[date];
-            let date_parsed = match format!("{date_string}T00:00:00.000Z").parse::<DateTime<Utc>>() {
+            let date_parsed = match date_string.parse::<NaiveDate>() {
                 Ok(value) => value,
                 Err(_error) => panic!("Parse Error {date_string}"),
             };
