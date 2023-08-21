@@ -1,13 +1,19 @@
 #![allow(non_snake_case)]
+
 use tonic::{transport::Server, Request, Response, Status};
 
+// gRPC
 use quantify::{AddTickerRequest, RemoveTickerRequest, StatusResponse};
 use quantify::quantify_data_server::{QuantifyData, QuantifyDataServer};
+
+// Library
+pub mod executor;
 
 pub mod quantify {
     tonic::include_proto!("quantify");
 }
 
+// gRPC Entry Points
 #[derive(Debug, Default)]
 pub struct QuantifyDataImpl {}
 
@@ -54,3 +60,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+// Polling / automatic behavior
+// TODO

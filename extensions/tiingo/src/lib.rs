@@ -49,7 +49,7 @@ pub fn get_api_key() -> String {
 #[cfg(test)]
 mod tests {
     use reqwest::Client;
-    use crate::{eod::{get_eod, ResampleFreq, EoD}, meta::{get_metadata, Metadata}};
+    use crate::{eod::{get_eod, ResampleFreq, EoD}, meta::get_metadata};
     use super::*;
 
     #[test]
