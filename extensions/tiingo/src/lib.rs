@@ -19,6 +19,9 @@ impl Default for TiingoRESTClient {
 }
 
 impl TiingoRESTClient {
+    pub fn new(web_client: Client) -> TiingoRESTClient{
+        TiingoRESTClient {web_client, api_key: get_api_key()}
+    }
 
     pub async fn get_metadata(
         &self,
