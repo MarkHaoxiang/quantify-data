@@ -4,8 +4,8 @@ use meta::get_metadata;
 use reqwest::Client;
 use chrono::NaiveDate;
 
-mod eod;
-mod meta;
+pub mod eod;
+pub mod meta;
 
 pub struct TiingoRESTClient {
     web_client: Client,
