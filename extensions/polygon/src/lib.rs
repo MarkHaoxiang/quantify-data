@@ -24,6 +24,10 @@ impl Default for PolygonRESTClient {
 }
 
 impl PolygonRESTClient {
+    pub fn new(web_client: Client) -> PolygonRESTClient {
+        return PolygonRESTClient { web_client: web_client, api_key: get_api_key() };
+    }
+
     pub async fn get_aggs(
         &self,
         ticker: &str,

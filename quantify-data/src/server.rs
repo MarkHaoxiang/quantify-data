@@ -3,11 +3,19 @@
 use tonic::{transport::Server, Request, Response, Status};
 
 // gRPC
-use quantify::{AddTickerRequest, RemoveTickerRequest, StatusResponse};
+use quantify::{
+    Ticker,
+    CandleData,
+    AddTickerRequest,
+    RemoveTickerRequest,
+    UpdateCandleDataRequest,
+    GetCandleDataRequest,
+    StatusResponse,
+    GetCandleDataResponse};
 use quantify::quantify_data_server::{QuantifyData, QuantifyDataServer};
 
 // Library
-pub mod executor;
+mod executor;
 
 pub mod quantify {
     tonic::include_proto!("quantify");
@@ -46,10 +54,47 @@ impl QuantifyData for QuantifyDataImpl {
 
         Ok(Response::new(reply))
     }
+
+    async fn update_candle_data(
+        &self,
+        request: Request<UpdateCandleDataRequest>
+    ) -> Result<Response<StatusResponse>, Status> {
+        println!("Adding candle data {:?}", request);
+
+        let reply = StatusResponse {
+            success: true,
+            info: Some(String::from("Added candle data"))
+        };
+
+        Ok(Response::new(reply))
+    }
+
+    async fn get_candle_data(
+        &self,
+        request: Request<GetCandleDataRequest>
+    ) -> Result<Response<GetCandleDataResponse>, Status> {
+        println!("Retrieving candle data {:?}", request);
+
+        let reply = GetCandleDataResponse {
+            candle_data: vec![CandleData{
+                ticker: Some(Ticker{name: "test".to_string()}),
+                timestamp: 100,
+                open: 5.0,
+                close: 5.0,
+                high: 5.0,
+                low: 5.0,
+                volume: 10,
+                num_transactions: 20,
+            }]
+        };
+
+        Ok(Response::new(reply))
+    }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Run gRPC server
     let addr = "[::1]:50051".parse()?;
     let server = QuantifyDataImpl::default();
 
@@ -58,7 +103,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .serve(addr)
         .await?;
 
-    Ok(())
+    Ok(())   
 }
 
 // Polling / automatic behavior

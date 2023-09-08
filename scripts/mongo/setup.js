@@ -59,6 +59,8 @@ function main() {
         // Fundamentals
     db.createCollection("fundamentals", {       
     });
+
+    console.log("Success");
 }
 
 main()

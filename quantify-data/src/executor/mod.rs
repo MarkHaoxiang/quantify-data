@@ -1,17 +1,41 @@
 use core::future::Future;
 use std::sync::Arc;
 
-use mongodb::{self, options::{ClientOptions, ServerApi, ServerApiVersion}, Client};
-use tokio::{sync::Mutex, spawn, task::JoinHandle};
+use mongodb::{self, options::{ClientOptions, FindOptions, ServerApi, ServerApiVersion}, bson::doc, Client, Database};
+use tokio::{spawn, task::JoinHandle};
+use futures::stream::TryStreamExt;
 
 use tiingo::{self, TiingoRESTClient};
+use polygon::{self, PolygonRESTClient};
+
+use chrono::NaiveDateTime;
+use serde::{Deserialize, Serialize};
+
+// MongoDB constants
+const QUANTIFY_DATABASE: &str = "quantify";
+const DAY_CANDLE_COLLECTION: &str = "day_candle";
+const HOUR_CANDLE_COLLECTION: &str = "hour_candle";
+const MINUTE_CANDLE_COLLECTION: &str = "minute_candle";
+
+// Definitions
+#[derive(Debug, Serialize, Deserialize)]
+struct CandleData {
+    ticker: String,
+    timestamp: NaiveDateTime,
+    open: f64,
+    close: f64,
+    high: f64,
+    low: f64,
+    volume: i64,
+    num_transactions: i64
+}
 
 /**
  * Executor manages pool of tasks running on Tokio threads
  * Locking on a single mongodb::Client
  */
 pub struct Executor {
-    locked_mongo_client: Arc<Mutex<Client>>,
+    db_ref: Database
 }
 
 impl Executor {
@@ -23,9 +47,9 @@ impl Executor {
         let server_api = ServerApi::builder().version(ServerApiVersion::V1).build();
             client_options.server_api = Some(server_api);
         let mongo_client = Client::with_options(client_options)?;
-        let locked_mongo_client = Arc::new(Mutex::new(mongo_client));
+        let db_ref = mongo_client.database(QUANTIFY_DATABASE);
 
-        Ok(Executor {locked_mongo_client})
+        Ok(Executor {db_ref})
     }
 
     /**
@@ -33,7 +57,7 @@ impl Executor {
      */
     pub fn execute(&self, task: &Arc<impl TaskFactory>) -> JoinHandle<()>
     {
-        let task: Task = TaskFactory::init(task.clone(), &self.locked_mongo_client);
+        let task: Task = TaskFactory::init(task.clone(), self.db_ref.clone());
         spawn(Box::into_pin(task))
     }
 }
@@ -42,8 +66,10 @@ impl Executor {
 type Task = Box<dyn Future<Output=()> + Send +'static>;
 pub trait TaskFactory
 {
-    fn init(this: Arc<Self>, lmc: &Arc<Mutex<Client>>) -> Task;
+    fn init(this: Arc<Self>, db_ref: Database) -> Task;
 }
+
+// Tasks
 
 pub struct AddTickerTask {
     ticker: String
@@ -57,7 +83,7 @@ impl AddTickerTask {
 }
 
 impl TaskFactory for AddTickerTask {
-    fn init (this: Arc<Self>, lmc: &Arc<Mutex<Client>>) -> Task {
+    fn init (this: Arc<Self>, db_ref: Database) -> Task {
         Box::new(async move {
             // Initialize clients
             println!("Running");
@@ -67,10 +93,73 @@ impl TaskFactory for AddTickerTask {
     }
 }
 
+pub enum Granularity {
+    Days(i32),
+    Hours(i32),
+    Minutes(i32)
+}
+
+pub struct UpdateCandleDataTask {
+    ticker: String,
+    granularity: Granularity
+}
+
+impl UpdateCandleDataTask {
+    pub fn new(ticker: &str, granularity: Granularity) -> UpdateCandleDataTask{
+        let t = String::from(ticker);
+        UpdateCandleDataTask{ticker: t, granularity}
+    }
+}
+
+impl TaskFactory for UpdateCandleDataTask {
+    fn init (this: Arc<Self>, db_ref: Database) -> Task {
+        Box::new(async move {
+            // Initialize clients
+            println!("Running");
+            let client = reqwest::Client::new();
+            let polygon_client = PolygonRESTClient::new(client);
+
+            // Get collection handle and granularity
+            let col_name: &str;
+            let granularity: i32;
+            match this.granularity {
+                Granularity::Days(m) => {
+                    col_name = DAY_CANDLE_COLLECTION;
+                    granularity = m;
+                },
+                Granularity::Hours(m) => {
+                    col_name = HOUR_CANDLE_COLLECTION;
+                    granularity = m;
+                },
+                Granularity::Minutes(m) => {
+                    col_name = MINUTE_CANDLE_COLLECTION;
+                    granularity = m;
+                }
+            };
+            let col_ref = db_ref.collection::<CandleData>(col_name);
+
+            // Get latest entry
+            let find_options = FindOptions::builder()
+                .sort(doc! { "timestamp": -1 })
+                .limit(1)
+                .build();
+            let cursor = col_ref.find(None, find_options).await?;
+            
+            if let Some(latest_data) = cursor.try_next().await? {
+                // Latest data found
+
+            } else {
+                // Latest data not found
+            }
+        })
+    }
+}
+
 // Tests
 #[cfg(test)]
 mod tests {
     use log::warn;
+    use mongodb::Database;
     use tokio::task::JoinHandle;
     use std::sync::{Arc, Mutex};
     use super::{Executor, TaskFactory, Task};
@@ -91,7 +180,7 @@ mod tests {
         }
 
         impl TaskFactory for ExampleTask {
-            fn init(this: Arc<Self>, lmc: &Arc<tokio::sync::Mutex<mongodb::Client>>) -> Task {
+            fn init(this: Arc<Self>, db_ref: Database) -> Task {
                 Box::new(async move {
                     let mut count = this.count.lock().unwrap();
                     *count += 1;
