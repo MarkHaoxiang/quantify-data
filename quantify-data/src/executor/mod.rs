@@ -1,11 +1,11 @@
 use core::future::Future;
 use std::sync::Arc;
 
-use mongodb::{self, options::{ClientOptions, FindOptions, ServerApi, ServerApiVersion}, bson::doc, Client, Database};
+use mongodb::{self, options::{ClientOptions, FindOptions}, bson::Document, bson::doc, Client, Database, Collection};
 use tokio::{spawn, task::JoinHandle};
 use futures::stream::TryStreamExt;
 
-use tiingo::{self, TiingoRESTClient};
+use tiingo::{self, TiingoRESTClient, meta::Metadata};
 use polygon::{self, PolygonRESTClient};
 
 use chrono::NaiveDateTime;
@@ -34,6 +34,7 @@ struct CandleData {
  * Executor manages pool of tasks running on Tokio threads
  * Locking on a single mongodb::Client
  */
+
 pub struct Executor {
     db_ref: Database
 }
@@ -42,10 +43,9 @@ impl Executor {
     /**
      * Create a new Executor
      */
-    pub async fn build(uri: &str) -> Result<Executor, mongodb::error::Error>{
+    pub async fn build(uri: &str) -> Result<Executor, mongodb::error::Error> {
         let mut client_options = ClientOptions::parse(uri).await?;
-        let server_api = ServerApi::builder().version(ServerApiVersion::V1).build();
-            client_options.server_api = Some(server_api);
+        client_options.app_name = Some("Quantify".to_string());
         let mongo_client = Client::with_options(client_options)?;
         let db_ref = mongo_client.database(QUANTIFY_DATABASE);
 
@@ -86,9 +86,32 @@ impl TaskFactory for AddTickerTask {
     fn init (this: Arc<Self>, db_ref: Database) -> Task {
         Box::new(async move {
             // Initialize clients
-            println!("Running");
             let client = reqwest::Client::new();
             let tiingo_client = TiingoRESTClient::new(client);
+
+            // Get data
+            let ticker_data: Metadata = tiingo_client.get_metadata(&this.ticker).await;
+                // TODO: Polygon data with check
+
+            // Update meta table
+            {
+                // Get the mongo client lock
+                let collection: Collection<Document> = db_ref.collection::<Document>("tickers");
+                // Update the document
+                    // TODO: Remaining fields of document
+                let ticker_document = doc! {
+                    "ticker": ticker_data.name.to_lowercase(),
+                    "exchange": ticker_data.exchange_code.to_lowercase()
+                };
+                    // TODO: Error handling
+                collection.delete_many(
+                    doc! {
+                        "ticker": ticker_data.name.to_lowercase(),
+                    } ,
+                    None
+                ).await.unwrap();
+                collection.insert_one(ticker_document, None).await.unwrap();
+            }      
         })
     }
 }
@@ -158,19 +181,21 @@ impl TaskFactory for UpdateCandleDataTask {
 // Tests
 #[cfg(test)]
 mod tests {
-    use log::warn;
     use mongodb::Database;
     use tokio::task::JoinHandle;
-    use std::sync::{Arc, Mutex};
+    use std::{env, sync::{Arc, Mutex}};
+    use std::io::{self,Write};
     use super::{Executor, TaskFactory, Task};
 
     #[tokio::test]
     async fn test_executor() {
         // Create executor
-        let exec = match Executor::build("localhost:27017").await {
+        let client_uri =
+            env::var("QUANTIFY_DATABASE_URI").expect("You must set the QUANTIFY_DATABASE_URI environment var!");
+        let exec = match Executor::build(&client_uri).await {
             Ok(exec) => exec,
             Err(_) => {
-                warn!("MongoDB is not available");
+                write!(&mut io::stdout(), "Skipping test: MongoDB cannot be accessed \n").unwrap();
                 return;
             }
         };
