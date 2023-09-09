@@ -6,13 +6,7 @@ use tonic::{Request, transport::Channel};
 use quantify::{
     GranularityType,
     Ticker,
-    CandleData,
-    AddTickerRequest,
-    RemoveTickerRequest,
-    UpdateCandleDataRequest,
-    GetCandleDataRequest,
-    StatusResponse,
-    GetCandleDataResponse};
+    UpdateCandleDataRequest};
 use quantify::quantify_data_client::QuantifyDataClient;
 
 pub mod quantify {

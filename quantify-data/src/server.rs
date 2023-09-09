@@ -54,7 +54,7 @@ impl QuantifyData for QuantifyDataImpl {
                 })),
         };
 
-        let task = Arc::new(executor::AddTickerTask::new(ticker));
+        /*let task = Arc::new(executor::AddTickerTask::new(ticker));
 
         match __self.executor.execute(&task).await {
             Ok(_) => {},
@@ -64,6 +64,8 @@ impl QuantifyData for QuantifyDataImpl {
                     info: Some(String::from("Ticker subscription failed"))
                 })),
         };
+
+        */
 
         let reply = StatusResponse {
             success: true,
