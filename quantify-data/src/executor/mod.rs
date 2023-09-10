@@ -1,72 +1,101 @@
 #![warn(missing_docs)]
 
 use core::future::Future;
-use std::sync::Arc;
+use std::{sync::Arc, error::Error};
 
-use mongodb::{self, options::{ClientOptions, FindOptions}, bson::Document, bson::doc, Client, Database, Collection};
+use mongodb::{self, options::ClientOptions, Database};
 use tokio::{spawn, task::JoinHandle};
-use futures::stream::TryStreamExt;
-
-use tiingo::{self, TiingoRESTClient, meta::Metadata};
-use polygon::{self, PolygonRESTClient};
-
-use chrono::NaiveDateTime;
-use serde::{Deserialize, Serialize};
 
 const QUANTIFY_DATABASE: &str = "quantify";
 
-// TODO:
-// 1. Write a macro for execute (to do the arc wrap)
+pub mod tasks;
 
-/**
- * Executor manages pool of tasks running on Tokio threads
- * Locking on a single mongodb::Client
- */
-
+/// Asynchronously manages execution of tasks
+/// 
+/// Handles on the quantify database and scheduler(TODO).
 pub struct Executor {
-    db_ref: Database
+    db_ref: Database,
+    client: reqwest::Client
 }
-
 impl Executor {
-    /**
-     * Create a new Executor
-     */
+    /// Constructs a new executor
+    ///
+    /// # Arguments
+    /// 
+    /// * 'uri' - A string slice that represents the mongo database connection
+    ///
     pub async fn build(uri: &str) -> Result<Executor, mongodb::error::Error>
     {
         let mut client_options = ClientOptions::parse(uri).await?;
         client_options.app_name = Some("Quantify".to_string());
-        let mongo_client = Client::with_options(client_options)?;
+        let mongo_client = mongodb::Client::with_options(client_options)?; 
         let db_ref = mongo_client.database(QUANTIFY_DATABASE);
+        let client = reqwest::Client::new();
 
-        Ok(Executor {db_ref})
+        Ok(Executor {db_ref, client})
     }
 
-    /**
-     * Runs a task
-     */
-    pub fn execute(self: &Arc<Self>, task: &Arc<impl TaskFactory>) -> JoinHandle<()>
+    /// Runs a task
+    /// 
+    /// Calls tokio spawn internally
+    /// 
+    /// # Arguments
+    /// 
+    /// * 'self' - a reference counted Executor, to ensure lifespan is above all tasks
+    /// * 'task' - the task to execute, in the form of a task factory
+    pub fn execute(self: &Arc<Self>, task: &Arc<impl TaskFactory>) -> JoinHandle<Result<(), Box<dyn Error + Send + Sync>>>
     {
-        let task: Task = TaskFactory::init(task.clone(), self.clone(), self.db_ref.clone());
+        let task: Task = TaskFactory::init(
+            task.clone(),
+            self.clone(), 
+            self.db_ref.clone(),
+            self.client.clone()
+        );
         spawn(Box::into_pin(task))
     }
 }
 
-
-type Task = Box<dyn Future<Output=()> + Send +'static>;
+/// An spawnable function
+type Task = Box<dyn Future<Output=Result<(),Box<dyn Error + Send + Sync>>> + Send +'static>;
+/// An executable task
 pub trait TaskFactory
 {
-    fn init(this: Arc<Self>, executor: Arc<Executor>, db_ref: Database) -> Task;
+    /// Initializes the task based on the context
+    /// 
+    /// # Arguments
+    /// 
+    /// * 'this'
+    /// * 'executor' - For use in recursive calls
+    /// * 'db_ref' - Mongo database handle for quantify
+    /// * 'client' - reqwest client
+    /// 
+    /// # Examples
+    /// 
+    /// ```
+    /// struct ExampleTask {
+    ///     count: Mutex<i32>
+    /// }
+    /// impl TaskFactory for ExampleTask {
+    ///     fn init(this: Arc<Self>, _executor: Arc<Executor>, _db_ref: Database) -> Task {
+    ///         Box::new(async move {
+    ///             let mut count = this.count.lock().unwrap();
+    ///             *count += 1;
+    ///         })
+    ///     }
+    /// }
+    /// ```
+    fn init(this: Arc<Self>, executor: Arc<Executor>, db_ref: Database, client: reqwest::Client) -> Task;
 }
 
 // Tests
 #[cfg(test)]
 mod tests {
     use mongodb::Database;
-    use tokio::task::JoinHandle;
     use std::{env, sync::{Arc, Mutex}};
     use std::io::{self,Write};
     use super::{Executor, TaskFactory, Task};
 
+    // Creates an executor based on environment variables
     async fn create_executor() -> Option<Arc<Executor>> {
         let client_uri =
             env::var("QUANTIFY_DATABASE_URI").expect("You must set the QUANTIFY_DATABASE_URI environment var!");
@@ -92,14 +121,15 @@ mod tests {
             count: Mutex<i32>
         }
         impl TaskFactory for ExampleTask {
-            fn init(this: Arc<Self>, _executor: Arc<Executor>, _db_ref: Database) -> Task {
+            fn init(this: Arc<Self>, _executor: Arc<Executor>, _db_ref: Database, _client: reqwest::Client) -> Task {
                 Box::new(async move {
                     let mut count = this.count.lock().unwrap();
                     *count += 1;
+                    Ok(())
                 })
             }
         }
-        let mut handles: Vec<JoinHandle<()>> = Vec::new();
+        let mut handles = Vec::new();
         let example = Arc::new(ExampleTask {count: Mutex::new(0)});
         for _ in 0..10 {
             handles.push(exec.execute(&example))
@@ -125,7 +155,7 @@ mod tests {
             v: Mutex<i32>
         }
         impl TaskFactory for FibonacciTask {
-            fn init(this: Arc<Self>, executor: Arc<Executor>, _db_ref: Database) -> Task {
+            fn init(this: Arc<Self>, executor: Arc<Executor>, _db_ref: Database, _client: reqwest::Client) -> Task {
                 Box::new(async move {
                     if this.n == 0 {
                         *this.v.lock().unwrap() = 0;
@@ -142,6 +172,7 @@ mod tests {
                         let _ = handle_1.await; let _ = handle_2.await;
                         *this.v.lock().unwrap() = *fib_1.v.lock().unwrap() + *fib_2.v.lock().unwrap();
                     }
+                    Ok(())
                 })
             }
         }

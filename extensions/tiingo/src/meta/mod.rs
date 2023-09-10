@@ -1,15 +1,22 @@
 use core::fmt;
+use std::error::Error;
 
 use reqwest::Client;
 use chrono::NaiveDate;
 use serde_json::Value;
 
 pub struct Metadata {
+    /// Ticker related to the asset
     pub ticker: String,
+    /// Full-length name of the asset
     pub name: String,
+    /// An identifier that maps which Exchange this is listed on
     pub exchange_code: String,
+    /// Long-form description of the asset
     pub description: String,
+    /// The earliest date Tiingo has price data
     pub start_date: NaiveDate,
+    /// The latest date Tiingo has price data
     pub end_date: NaiveDate
 }
 
@@ -34,7 +41,7 @@ pub(super) async fn get_metadata(
     ticker: &str,
     client: &Client,
     api_key: &str
-) -> Metadata {
+) -> Result<Metadata, Box<dyn Error + Send + Sync>> {
     // Construct request
     let request: String = String::from(format!("https://api.tiingo.com/tiingo/daily/{}?token={}", ticker, api_key));
 
@@ -43,20 +50,18 @@ pub(super) async fn get_metadata(
         .get(request)
         .header("Content-Type", "application/json")
         .send()
-        .await
-        .unwrap()
+        .await?
         .text()
-        .await
-        .unwrap();
+        .await?;
 
     // Parse response
     let v: Value = serde_json::from_str(&response).unwrap();
     let start_date = v["startDate"].to_string()
-        .trim_matches('"').parse::<NaiveDate>().unwrap();
+        .trim_matches('"').parse::<NaiveDate>()?;
     let end_date = v["endDate"].to_string()
-        .trim_matches('"').parse::<NaiveDate>().unwrap();
+        .trim_matches('"').parse::<NaiveDate>()?;
 
-    Metadata
+    Ok(Metadata
     {
         ticker: v["ticker"].to_string().trim_matches('"').to_string(),
         name: v["name"].to_string().trim_matches('"').to_string(),
@@ -64,5 +69,5 @@ pub(super) async fn get_metadata(
         description: v["description"].to_string().trim_matches('"').to_string(),
         start_date: start_date,
         end_date: end_date
-    }
+    })
 }

@@ -1,3 +1,13 @@
+use std::sync::Arc;
+
+use chrono::NaiveDateTime;
+use futures::TryStreamExt;
+use mongodb::{Database, options::FindOptions, bson::doc};
+use polygon::PolygonRESTClient;
+use serde::{Serialize, Deserialize};
+
+use crate::executor::{Executor, Task, TaskFactory};
+
 // MongoDB constants
 const DAY_CANDLE_COLLECTION: &str = "day_candle";
 const HOUR_CANDLE_COLLECTION: &str = "hour_candle";
@@ -35,12 +45,10 @@ impl UpdateCandleDataTask {
 }
 
 impl TaskFactory for UpdateCandleDataTask {
-    fn init (this: Arc<Self>, executor: &Executor, db_ref: Database) -> Task {
+    fn init (this: Arc<Self>, _executor: Arc<Executor>, db_ref: Database, client: reqwest::Client) -> Task {
         Box::new(async move {
             // Initialize clients
-            println!("Running");
-            let client = reqwest::Client::new();
-            let polygon_client = PolygonRESTClient::new(client);
+            let _polygon_client = PolygonRESTClient::new(client);
 
             // Get collection handle and granularity
             let col_name: &str;
@@ -68,12 +76,13 @@ impl TaskFactory for UpdateCandleDataTask {
                 .build();
             let mut cursor = col_ref.find(None, find_options).await.unwrap();
             
-            if let Some(latest_data) = cursor.try_next().await.unwrap() {
+            if let Some(_latest_data) = cursor.try_next().await.unwrap() {
                 // Latest data found
 
             } else {
                 // Latest data not found
             }
+            Ok(())
         })
     }
 }

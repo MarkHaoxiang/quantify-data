@@ -43,7 +43,7 @@ impl PolygonRESTClient {
         &self,
         ticker: &str,
         date: Option<&NaiveDate>,
-    ) -> Result<Metadata, Box<dyn Error>> {
+    ) -> Result<Metadata, Box<dyn Error + Send + Sync>> {
         get_meta(ticker, &self.web_client, &self.api_key, date).await
     }
 }

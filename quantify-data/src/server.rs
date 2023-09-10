@@ -1,5 +1,7 @@
 #![allow(non_snake_case)]
 
+
+
 use std::sync::Arc;
 
 use executor::Executor;
@@ -26,13 +28,13 @@ pub mod quantify {
 
 // gRPC Entry Points
 pub struct QuantifyDataImpl {
-    pub executor: executor::Executor
+    pub executor: Arc<executor::Executor>
 }
 
 impl QuantifyDataImpl {
     pub async fn build(uri: &str) -> QuantifyDataImpl {
         let executor = Executor::build(uri).await.unwrap();
-        QuantifyDataImpl { executor }
+        QuantifyDataImpl { executor: Arc::new(executor) }
     }
 }
 
@@ -54,8 +56,7 @@ impl QuantifyData for QuantifyDataImpl {
                 })),
         };
 
-        /*let task = Arc::new(executor::AddTickerTask::new(ticker));
-
+        let task = Arc::new(executor::tasks::AddTickerTask::new(ticker));
         match __self.executor.execute(&task).await {
             Ok(_) => {},
             Err(_) => 
@@ -64,8 +65,6 @@ impl QuantifyData for QuantifyDataImpl {
                     info: Some(String::from("Ticker subscription failed"))
                 })),
         };
-
-        */
 
         let reply = StatusResponse {
             success: true,

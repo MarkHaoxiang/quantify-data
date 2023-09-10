@@ -27,6 +27,10 @@ function main() {
                         bsonType: "string",
                         description: "The ticker name for this asset"
                     },
+                    company: {
+                        bsonType: "string",
+                        description: "The company name for this asset"
+                    },
                     exchange: {
                         bsonType: "string",
                         description: "The exchange on which the ticker is traded"

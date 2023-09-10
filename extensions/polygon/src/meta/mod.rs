@@ -10,51 +10,51 @@ use crate::PolygonResponseError;
 #[derive(Deserialize, Debug, Default)]
 #[serde(default)]
 pub struct Metadata {
-    // Whether the asset is actively traded
+    /// Whether the asset is actively traded
     pub active: bool,
-    // Address of headquarters
+    /// Address of headquarters
     pub address: Address,
-    // Central Index Key
+    /// Central Index Key
     pub cik: String,
-    // Composite OpenFIGI number
+    /// Composite OpenFIGI number
     pub composite_figi: String,
-    // Currency that this asset is trade with
+    /// Currency that this asset is trade with
     #[serde(alias="currency_name")]
     pub currency: String,
-    // Last date the asset was traded if it had been delisted
+    /// Last date the asset was traded if it had been delisted
     pub delisted_utc: String,
-    // Description of company
+    /// Description of company
     pub description: String,
-    // Homepage URL of company website
+    /// Homepage URL of company website
     pub homepage_url: String,
-    // Date of first public listing of symbol
+    /// Date of first public listing of symbol
     pub list_date: NaiveDate,
-    // Locale of asset
+    /// Locale of asset
     pub locale: Locale,
-    // Market type of asset
+    /// Market type of asset
     #[serde(alias="market")]
     pub market_type: MarketType,
-    // The most recent close price of the ticker multiplied by weighted outstanding shares
+    /// The most recent close price of the ticker multiplied by weighted outstanding shares
     pub market_cap: f64,
-    // Company name
+    /// Company name
     pub name: String,
-    // Phone number of company
+    /// Phone number of company
     pub phone_number: String,
-    // The ISO code of the primary listing exchange for the asset
+    /// The ISO code of the primary listing exchange for the asset
     pub primary_exchange: String,
-    // Round lot size of security
+    /// Round lot size of security
     pub round_lot: f64,
-    // The share Class OpenFIGI number for the ticker
+    /// The share Class OpenFIGI number for the ticker
     pub share_class_figi: String,
-    // Standard industrial classification (SIC) code for the ticker
+    /// Standard industrial classification (SIC) code for the ticker
     pub sic_code: String,
-    // SIC description for the ticker
+    /// SIC description for the ticker
     pub sic_description: String,
-    // Exchange symbol (ticker) that this item is traded under
+    /// Exchange symbol (ticker) that this item is traded under
     pub ticker: String,
-    // The root of the ticker
+    /// The root of the ticker
     pub ticker_root: String,
-    // The suffix of the ticker
+    /// The suffix of the ticker
     pub ticker_suffix: String,
     // Total number of employees
     pub total_employees: f64,
@@ -134,7 +134,7 @@ pub(super) async fn get_meta (
     client: &Client,
     api_key: &str,
     date: Option<&NaiveDate>,
-) -> Result<Metadata, Box<dyn Error>> {
+) -> Result<Metadata, Box<dyn Error + Send + Sync>> {
 
     // Construct request
     let mut request = String::from(format!("https://api.polygon.io/v3/reference/tickers/{}?", ticker));

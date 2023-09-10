@@ -1,5 +1,5 @@
 use core::fmt;
-use std::option::Option;
+use std::{option::Option, error::Error};
 
 use chrono::NaiveDate;
 use reqwest::Client;
@@ -92,7 +92,7 @@ pub(super) async fn get_eod (
     start_date: &Option<NaiveDate>,
     end_date: &Option<NaiveDate>,
     resample_freq: &Option<ResampleFreq>
-) -> Vec<EoD> {
+) -> Result<Vec<EoD>, Box<dyn Error + Send + Sync>> {
     // Construct request
     let mut request = String::from(format!("https://api.tiingo.com/tiingo/daily/{}/prices?format=csv&token={}", ticker, api_key));
     if let Some(start_date) = start_date {
@@ -109,11 +109,9 @@ pub(super) async fn get_eod (
         .get(request)
         .header("Content-Type", "application/json")
         .send()
-        .await
-        .unwrap()
+        .await?
         .text()
-        .await
-        .unwrap();
+        .await?;
 
     // Parse response
     let mut result: Vec<EoD> = Vec::new();
@@ -149,31 +147,28 @@ pub(super) async fn get_eod (
             let data: Vec<&str> = data.collect();
 
             let date_string = data[date];
-            let date_parsed = match date_string.parse::<NaiveDate>() {
-                Ok(value) => value,
-                Err(_error) => panic!("Parse Error {date_string}"),
-            };
+            let date_parsed = date_string.parse::<NaiveDate>()?;
 
             result.push
             (
                 EoD
                 {
                     date: date_parsed,
-                    open: data[open].parse().unwrap(),
-                    high: data[high].parse().unwrap(),
-                    low: data[low].parse().unwrap(),
-                    close: data[close].parse().unwrap(),
-                    volume: data[volume].parse().unwrap(),
-                    adj_open: data[adj_open].parse().unwrap(),
-                    adj_high: data[adj_high].parse().unwrap(),
-                    adj_low: data[adj_low].parse().unwrap(),
-                    adj_close: data[adj_close].parse().unwrap(),
-                    adj_volume: data[adj_volume].parse().unwrap(),
-                    dividend: data[dividend].parse().unwrap(),
-                    split: data[split].parse().unwrap()
+                    open: data[open].parse()?,
+                    high: data[high].parse()?,
+                    low: data[low].parse()?,
+                    close: data[close].parse()?,
+                    volume: data[volume].parse()?,
+                    adj_open: data[adj_open].parse()?,
+                    adj_high: data[adj_high].parse()?,
+                    adj_low: data[adj_low].parse()?,
+                    adj_close: data[adj_close].parse()?,
+                    adj_volume: data[adj_volume].parse()?,
+                    dividend: data[dividend].parse()?,
+                    split: data[split].parse()?
                 }
             )
         }
     }
-    return result;
+    return Ok(result);
 }

@@ -1,4 +1,4 @@
-use std::env;
+use std::{env, error::Error};
 use eod::get_eod;
 use meta::get_metadata;
 use reqwest::Client;
@@ -7,40 +7,49 @@ use chrono::NaiveDate;
 pub mod eod;
 pub mod meta;
 
+/// A client to access Tiingo REST APIs
+/// 
+/// See https://www.tiingo.com/documentation/general/overview
 pub struct TiingoRESTClient {
     web_client: Client,
     api_key: String
 }
-
 impl Default for TiingoRESTClient {
     fn default() -> Self {
         TiingoRESTClient { web_client: Client::new(), api_key: get_api_key()}
     }
 }
-
 impl TiingoRESTClient {
+    /// Creates a new TiingoRESTClient
+    /// 
+    /// # Arguments
+    /// 
+    /// * `web_client`
     pub fn new(web_client: Client) -> TiingoRESTClient{
         TiingoRESTClient {web_client, api_key: get_api_key()}
     }
 
+    /// Gets Metadata
     pub async fn get_metadata(
         &self,
-        ticker: &str) -> meta::Metadata
+        ticker: &str) -> Result<meta::Metadata, Box<dyn Error + Send + Sync>>
     {
         get_metadata(ticker, &self.web_client, &self.api_key).await
     }
 
+    /// Gets end-of-day candle data
     pub async fn get_eod(
         &self,
         ticker: &str,
         start_date: &Option<NaiveDate>,
         end_date: &Option<NaiveDate>,
-        resample_freq: &Option<eod::ResampleFreq>) -> Vec<eod::EoD> 
+        resample_freq: &Option<eod::ResampleFreq>) -> Result<Vec<eod::EoD>, Box<dyn Error + Send + Sync>>
     {
         get_eod(ticker, &self.web_client, &self.api_key, start_date, end_date, resample_freq).await
     }
 }
 
+/// Returns the api key stored in env variable TIINGO_API_KEY
 pub fn get_api_key() -> String {
     let key = "TIINGO_API_KEY";
     match env::var(key) {
@@ -66,7 +75,7 @@ mod tests {
     async fn test_rest_api() {
         let client = Client::new();
         // Metadata
-        let fetched_result = get_metadata("GOOGL", &client, &get_api_key()).await;
+        let fetched_result = get_metadata("GOOGL", &client, &get_api_key()).await.unwrap();
         assert_eq!(fetched_result.ticker, "GOOGL");
         assert_eq!(fetched_result.name, "Alphabet Inc - Class A");
 
@@ -81,7 +90,7 @@ mod tests {
             &Some(test_start), 
             &Some(test_end),
             &Some(ResampleFreq::DAILY)
-        ).await;
+        ).await.unwrap();
 
         let correct_result = EoD
             {
