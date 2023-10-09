@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, Utc};
 use futures::TryStreamExt;
 use mongodb::{Database, options::FindOptions, bson::doc};
-use polygon::PolygonRESTClient;
+use polygon::{PolygonRESTClient, Interval};
 use serde::{Serialize, Deserialize};
 
 use crate::executor::{Executor, Task, TaskFactory};
@@ -48,23 +48,25 @@ impl TaskFactory for UpdateCandleDataTask {
     fn init (this: Arc<Self>, _executor: Arc<Executor>, db_ref: Database, client: reqwest::Client) -> Task {
         Box::new(async move {
             // Initialize clients
-            let _polygon_client = PolygonRESTClient::new(client);
+            println!("Running");
+            let client = reqwest::Client::new();
+            let polygon_client = PolygonRESTClient::new(client);
 
             // Get collection handle and granularity
             let col_name: &str;
-            let granularity: i32;
+            let granularity: &Interval;
             match this.granularity {
                 Granularity::Days(m) => {
                     col_name = DAY_CANDLE_COLLECTION;
-                    granularity = m;
+                    granularity = &Interval::Days(m);
                 },
                 Granularity::Hours(m) => {
                     col_name = HOUR_CANDLE_COLLECTION;
-                    granularity = m;
+                    granularity = &Interval::Hours(m);
                 },
                 Granularity::Minutes(m) => {
                     col_name = MINUTE_CANDLE_COLLECTION;
-                    granularity = m;
+                    granularity = &Interval::Minutes(m);
                 }
             };
             let col_ref = db_ref.collection::<CandleData>(col_name);
@@ -74,14 +76,36 @@ impl TaskFactory for UpdateCandleDataTask {
                 .sort(doc! { "timestamp": -1 })
                 .limit(1)
                 .build();
-            let mut cursor = col_ref.find(None, find_options).await.unwrap();
+            let data_result = col_ref
+                .find(None, find_options)
+                .await?
+                .try_next()
+                .await?;
             
-            if let Some(_latest_data) = cursor.try_next().await.unwrap() {
-                // Latest data found
-
-            } else {
-                // Latest data not found
+            if data_result.unwrap().is_none() {
+                // None retrieved
+                println!("latest candle data not found");
+                return Err("latest candle data not found");
             }
+            
+            // Latest data found
+            let Some(latest_data) = data_result.unwrap();
+
+            // Get timestamp of latest data and use it as the start_date of retrieval
+            let start_date = &latest_data.timestamp.date();
+
+            // Retrieve from PolygonIO
+            let end_date = &Utc::now().naive_utc().date(); // NOTE: Using UTC as standard
+            let adjusted = &false;
+            let data = polygon_client.get_aggs(
+                this.ticker.as_str(),
+                start_date,
+                end_date,
+                granularity,
+                adjusted).await?;
+
+            // TODO: Add data to MongoDB
+
             Ok(())
         })
     }
