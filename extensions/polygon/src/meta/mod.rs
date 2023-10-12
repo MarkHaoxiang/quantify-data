@@ -5,8 +5,6 @@ use chrono::NaiveDate;
 use reqwest::Client;
 use serde::Deserialize;
 
-use crate::PolygonResponseError;
-
 #[derive(Deserialize, Debug, Default)]
 #[serde(default)]
 pub struct Metadata {
@@ -158,7 +156,7 @@ pub(super) async fn get_meta (
 
     // Check if there is an error. If there is, return it
     if res.status == "ERROR" {
-        return Err(Box::new(PolygonResponseError{error: res.error}));
+        return Err(res.error.into());
     }
 
     return Ok(res.results);

@@ -6,8 +6,6 @@ use chrono::serde::ts_milliseconds;
 use reqwest::Client;
 use serde::Deserialize;
 
-use crate::PolygonResponseError;
-
 const MAX_POLYGON_AGGS_LIMIT: i32 = 50000; // as defined by Polygon.io's API
 
 #[derive(Deserialize, Default)]
@@ -109,7 +107,7 @@ pub(super) async fn get_aggs (
     end_date: &NaiveDate,
     interval: &Interval,
     adjusted: &bool,
-) -> Result<Vec<AggregateData>, Box<dyn Error>> {
+) -> Result<Vec<AggregateData>, Box<dyn Error + Send + Sync>> {
 
     // Construct request
     let mut request = String::from(format!("https://api.polygon.io/v2/aggs/ticker/{}/range", ticker));
@@ -144,7 +142,7 @@ pub(super) async fn get_aggs (
 
     // Check if there is an error. If there is, return it
     if res.status == "ERROR" {
-        return Err(Box::new(PolygonResponseError{error: res.error}));
+        return Err(res.error.into());
     }
 
     // Add the results to the output vector

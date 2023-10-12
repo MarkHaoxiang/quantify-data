@@ -1,7 +1,6 @@
 use std::{env, error::Error};
 use reqwest::Client;
 use chrono::NaiveDate;
-use std::fmt;
 use agg::get_aggs;
 use meta::get_meta;
 
@@ -11,6 +10,9 @@ pub use meta::{Metadata, Address, Locale, MarketType};
 
 mod agg;
 mod meta;
+
+// Constants
+pub const DEFAULT_POLYGON_MAX_HISTORICAL_WEEKS: i64 = 260; // Maximum time in the past from which data can be pulled
 
 pub struct PolygonRESTClient {
     web_client: Client,
@@ -34,7 +36,7 @@ impl PolygonRESTClient {
         start_date: &NaiveDate,
         end_date: &NaiveDate,
         interval: &Interval,
-        adjusted: &bool,) -> Result<Vec<AggregateData>, Box<dyn Error>>
+        adjusted: &bool,) -> Result<Vec<AggregateData>, Box<dyn Error + Send + Sync>>
     {
         get_aggs(ticker, &self.web_client, &self.api_key, start_date, end_date, interval, adjusted).await
     }
@@ -53,20 +55,6 @@ pub fn get_api_key() -> String {
     match env::var(key) {
         Ok(v) => return v,
         Err(e) => panic!("${} is not set - {}$", key, e.to_string())
-    }
-}
-
-// Error-handling for responses
-#[derive(Debug)]
-struct PolygonResponseError {
-    error: String,
-}
-
-impl Error for PolygonResponseError {}
-
-impl fmt::Display for PolygonResponseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.error.as_str())
     }
 }
 
