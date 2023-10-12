@@ -1,13 +1,6 @@
-#![allow(non_snake_case)]
-
-
-
+use tonic::{Request, Response, Status};
 use std::sync::Arc;
 
-use executor::Executor;
-use tonic::{transport::Server, Request, Response, Status};
-
-// gRPC
 use quantify::{
     Ticker,
     CandleData,
@@ -16,30 +9,18 @@ use quantify::{
     UpdateCandleDataRequest,
     GetCandleDataRequest,
     StatusResponse,
-    GetCandleDataResponse};
-use quantify::quantify_data_server::{QuantifyData, QuantifyDataServer};
-
-// Library
-mod executor;
+    GetCandleDataResponse
+};
 
 pub mod quantify {
     tonic::include_proto!("quantify");
 }
 
-// gRPC Entry Points
-pub struct QuantifyDataImpl {
-    pub executor: Arc<executor::Executor>
-}
-
-impl QuantifyDataImpl {
-    pub async fn build(uri: &str) -> QuantifyDataImpl {
-        let executor = Executor::build(uri).await.unwrap();
-        QuantifyDataImpl { executor: Arc::new(executor) }
-    }
-}
+use quantify::quantify_data_server::QuantifyData;
+use quantifylib::executor;
 
 #[tonic::async_trait]
-impl QuantifyData for QuantifyDataImpl {
+impl QuantifyData for crate::QuantifyDataImpl {
 
     async fn add_ticker(
         &self,
@@ -124,20 +105,3 @@ impl QuantifyData for QuantifyDataImpl {
         Ok(Response::new(reply))
     }
 }
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mongo_addr = std::env::var("QUANTIFY_DATABASE_URI").expect("You must set the QUANTIFY_DATABASE_URI environment var!");
-    let server_addr = "[::1]:50051".parse()?;
-    let server = QuantifyDataImpl::build(&mongo_addr).await;
-
-    Server::builder()
-        .add_service(QuantifyDataServer::new(server))
-        .serve(server_addr)
-        .await?;
-
-    Ok(())   
-}
-
-// Polling / automatic behavior
-// TODO
