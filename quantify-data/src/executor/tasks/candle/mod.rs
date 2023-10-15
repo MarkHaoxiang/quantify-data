@@ -34,6 +34,7 @@ struct CandleData {
     num_transactions: i64
 }
 
+/// Task that checks the local database for the latest data entry for a given ticker and updates itwith the data updated since.
 pub struct UpdateCandleDataTask {
     ticker: String,
     granularity: Granularity,
@@ -41,11 +42,17 @@ pub struct UpdateCandleDataTask {
 }
 
 impl UpdateCandleDataTask {
+    /// Constructs a new Update Candle Data task.
+    /// 
+    /// # Arguments
+    /// 
+    /// * ticker - Ticker of target asset.
+    /// * granularity - The granularity of the data to be retrieved. Defined by the enum Granularity, which defines both the multiplier (eg. 5) and the interval (eg. minutes)
+    /// * max_historical_duration - The fallback historical duration (i.e. retrieve data from [now - duration] to now) if no data is found locally.
     #[allow(dead_code)]
     pub fn new(ticker: &str, granularity: Granularity, max_historical_duration: Option<Duration>) -> UpdateCandleDataTask{
         let t = String::from(ticker);
 
-        // The fallback historical duration (i.e. retrieve data from [now - duration] to now) if no data is found locally
         // Defaults to the maximum allowable duration by Polygon (defined as DEFAULT_POLYGON_MAX_HISTORICAL_WEEKS)
         let duration = match max_historical_duration {
             Some(duration) => duration,
