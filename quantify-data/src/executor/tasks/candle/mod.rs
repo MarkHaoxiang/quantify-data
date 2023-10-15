@@ -46,9 +46,9 @@ impl UpdateCandleDataTask {
     /// 
     /// # Arguments
     /// 
-    /// * ticker - Ticker of target asset.
-    /// * granularity - The granularity of the data to be retrieved. Defined by the enum Granularity, which defines both the multiplier (eg. 5) and the interval (eg. minutes)
-    /// * max_historical_duration - The fallback historical duration (i.e. retrieve data from [now - duration] to now) if no data is found locally.
+    /// * 'ticker' - Ticker of target asset.
+    /// * 'granularity' - The granularity of the data to be retrieved. Defined by the enum Granularity, which defines both the multiplier (eg. 5) and the interval (eg. minutes)
+    /// * 'max_historical_duration' - The fallback historical duration (i.e. retrieve data from [now - duration] to now) if no data is found locally.
     #[allow(dead_code)]
     pub fn new(ticker: &str, granularity: Granularity, max_historical_duration: Option<Duration>) -> UpdateCandleDataTask{
         let t = String::from(ticker);
