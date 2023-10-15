@@ -1,4 +1,7 @@
+use futures::Future;
+use tonic::transport::{Server, Error};
 use tonic::{Request, Response, Status};
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 use quantify::{
@@ -16,11 +19,28 @@ pub mod quantify {
     tonic::include_proto!("quantify");
 }
 
-use quantify::quantify_data_server::QuantifyData;
-use quantifylib::executor;
+use quantify::quantify_data_server::{QuantifyData, QuantifyDataServer};
+use quantifylib::executor::{self, Executor};
+
+pub struct QuantifyDataServerImpl {
+    pub executor: Arc<Executor>
+}
+
+impl QuantifyDataServerImpl {
+    pub async fn build(uri: &str) -> QuantifyDataServerImpl {
+        let executor = Executor::build(uri).await.unwrap();
+        QuantifyDataServerImpl { executor: Arc::new(executor) }
+    }
+
+    pub fn start_service(self, server_addr: SocketAddr) -> impl Future<Output = Result<(), Error>> { 
+        Server::builder()
+        .add_service(QuantifyDataServer::new(self))
+        .serve(server_addr)
+    }
+}
 
 #[tonic::async_trait]
-impl QuantifyData for crate::QuantifyDataImpl {
+impl QuantifyData for QuantifyDataServerImpl {
 
     async fn add_ticker(
         &self,

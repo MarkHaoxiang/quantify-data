@@ -1,31 +1,14 @@
 #![allow(non_snake_case)]
 
-use std::sync::Arc;
 use log::info;
 use clap::Parser;
-use tonic::transport::Server;
-use quantifylib::executor::Executor;
-
-use quantify::quantify_data_server::QuantifyDataServer;
+use server::grpc::QuantifyDataServerImpl;
+use tokio::runtime::Runtime;
 // Library
+mod gui;
 mod server;
 
-pub mod quantify {
-    tonic::include_proto!("quantify");
-}
-
-// Binary Representation
-pub struct QuantifyDataImpl {
-    pub executor: Arc<Executor>
-}
-
-impl QuantifyDataImpl {
-    pub async fn build(uri: &str) -> QuantifyDataImpl {
-        let executor = Executor::build(uri).await.unwrap();
-        QuantifyDataImpl { executor: Arc::new(executor) }
-    }
-}
-
+// Arguments
 #[derive(Parser)]
 #[command(name = "Quantify")]
 struct Cli {
@@ -33,27 +16,29 @@ struct Cli {
     headless: bool,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Get Arguments
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Get Arguments and initalise logger
     let cli = Cli::parse();
     env_logger::init();
-    if cli.headless {
-        info!("Running in headless mode");
-    }
-    else {
-        info!("Running in GUI mode");
-    }
+
+    // Construct tokio runtime
+    let runtime = Runtime::new().unwrap();
 
     // Construct Executor Service
     let mongo_addr = std::env::var("QUANTIFY_DATABASE_URI").expect("You must set the QUANTIFY_DATABASE_URI environment var!");
     let server_addr = "[::1]:50051".parse()?;
-    let server = QuantifyDataImpl::build(&mongo_addr).await;
+    let server = QuantifyDataServerImpl::build(&mongo_addr);
+    let server = runtime.block_on(server);
 
-    Server::builder()
-        .add_service(QuantifyDataServer::new(server))
-        .serve(server_addr)
-        .await?;
-
+    // Start application
+    if cli.headless {
+        info!("Running in headless mode");
+        runtime.block_on(server.start_service(server_addr))?;
+    }
+    else {
+        info!("Running in GUI mode");
+        let app = gui::QuantifyApp {server};
+        app.run()?;
+    }
     Ok(())   
 }
