@@ -1,30 +1,56 @@
+use tokio::runtime::Runtime;
+
 use crate::server::grpc::QuantifyDataServerImpl;
 
 pub struct QuantifyApp {
-    pub server: QuantifyDataServerImpl
+    runtime: Runtime,  
+    server: QuantifyDataServerImpl,
+    gui: QuantifyGUI
 }
 
 impl QuantifyApp {
 
-    pub fn run(self) -> Result<(), eframe::Error> {
+    pub fn new(runtime: Runtime, server: QuantifyDataServerImpl) -> QuantifyApp {
+        QuantifyApp {
+            runtime: runtime,
+            server: server,
+            gui: QuantifyGUI {}
+        }
+    }
+
+    pub fn run(self, server_addr: std::net::SocketAddr) -> Result<(), eframe::Error> {
+        // Setup gRPC
+        let _enter = self.runtime.enter();
+        std::thread::spawn(move || {
+            self.runtime.block_on(self.server.start_service(server_addr))
+        });
+
+        // Launch GUI app on the main thread
         let options = eframe::NativeOptions {
-            initial_window_size: Some(egui::vec2(320.0, 240.0)),
+            maximized: true,
             ..Default::default()
         };
+
         eframe::run_native(
             "Quantify",
             options,
-            Box::new(|cc| {
-                Box::new(self)
+            Box::new(|_cc| {
+                Box::new(self.gui)
             }),
         )
+
+        // Launch gRPC service
     }
 }
 
-impl eframe::App for QuantifyApp {
+pub struct QuantifyGUI {
+
+}
+
+impl eframe::App for QuantifyGUI {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("My egui Application");
+            ui.heading("Quantify");
             ui.horizontal(|ui| {
                 let name_label = ui.label("Your name: ");
             });
