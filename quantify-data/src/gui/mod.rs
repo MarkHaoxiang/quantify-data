@@ -1,42 +1,48 @@
-use tokio::runtime::Runtime;
+use std::sync::Arc;
+
+use quantifylib::executor::Executor;
+use tokio::runtime::{Runtime, self};
 
 use crate::server::grpc::QuantifyDataServerImpl;
 
 mod menu_bar;
 /// Bundled quantify application with GUI
+/// Since this contains a direct reference to the executor
+/// We can avoid using gRPC
 pub struct QuantifyApp {
+    // Shared runtime for use in calling async functions - probably using executor.
     runtime: Runtime,  
-    server: QuantifyDataServerImpl,
-    gui: QuantifyGUI
+    // Executor (shared with gRPC server)
+    executor: Arc<Executor>,
 }
 
 impl QuantifyApp {
-    /// Creates a bundled Quantify App
+    /// Starts the application
     /// 
     /// # Arguments
     /// 
-    /// * 'runtime' - Tokio runtime for async functions
-    /// * 'server' - gRPC server implementation
-    pub fn new(runtime: Runtime, server: QuantifyDataServerImpl) -> QuantifyApp {
-        QuantifyApp {
-            runtime: runtime,
-            server: server,
-            gui: QuantifyGUI {}
+    /// * 'executor' - Executor to run tasks
+    /// * 'grpc_server' - If provided, attempts to start a gRPC server at grpc_server_addr
+    /// * 'grpc_server_addr' - See above
+    pub fn run(executor: Arc<Executor>,
+               grpc_server: Option<QuantifyDataServerImpl>,
+               grpc_server_addr: Option<std::net::SocketAddr>) -> Result<(), eframe::Error> {
+        let runtime: Runtime = runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        // gRPC server if needed
+        if let Some(grpc_server) = grpc_server {
+            if let Some(grpc_server_addr) = grpc_server_addr {
+                runtime.spawn(grpc_server.start_service(grpc_server_addr));
+            }
+            else {
+                panic!("Attempting to initialise grpc server without address");
+            }
         }
-    }
-
-    /// Starts the runtime by launching an instance of the gRPC server and the UI
-    /// 
-    /// # Arguments
-    /// 
-    /// * 'server_addr' - gRPC server recieving socket
-    pub fn run(self, server_addr: std::net::SocketAddr) -> Result<(), eframe::Error> {
-        // Setup gRPC
-        let _enter = self.runtime.enter();
-        std::thread::spawn(move || {
-            self.runtime.block_on(self.server.start_service(server_addr))
-        });
-
+        // Create quantify app
+        let app = QuantifyApp {runtime:runtime, executor: executor};
         // Launch GUI app on the main thread
         let mut options = eframe::NativeOptions::default();
         options.maximized = true;
@@ -44,17 +50,12 @@ impl QuantifyApp {
         eframe::run_native(
             "Quantify",
             options,
-            Box::new(|_cc| {Box::new(self.gui)}),
+            Box::new(|_cc| {Box::new(app)}),
         )
     }
 }
 
-/// Representation of the GUI display state
-pub struct QuantifyGUI {
-
-}
-
-impl eframe::App for QuantifyGUI {
+impl eframe::App for QuantifyApp {
     /// Definition of GUI
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Menu bar

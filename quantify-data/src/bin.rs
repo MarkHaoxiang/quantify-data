@@ -37,8 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     else {
         info!("Running in GUI mode");
-        let app = gui::QuantifyApp::new(runtime, server);
-        app.run(server_addr)?;
+        let _ = gui::QuantifyApp::run(server.executor.clone(), Some(server), Some(server_addr));
     }
     Ok(())   
 }
