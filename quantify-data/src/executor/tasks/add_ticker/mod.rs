@@ -1,4 +1,4 @@
-use std::{sync::Arc, process::CommandArgs};
+use std::sync::Arc;
 
 use mongodb::{Database, Collection, bson::{Document, doc}};
 use reqwest::Client;

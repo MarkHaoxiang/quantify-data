@@ -3,13 +3,13 @@ name = "quantify-data"
 version = "0.1.0"
 edition = "2021"
 
-[[bin]]
-name = "quantify-data-server"
-path = "src/server.rs"
+[lib]
+name = "quantifylib"
+path = "src/lib.rs"
 
 [[bin]]
-name = "quantify-data-poller"
-path = "src/data_poller.rs"
+name = "quantify-data-server"
+path = "src/bin.rs"
 
 [dependencies]
 tiingo = {path = "../extensions/tiingo"}
@@ -23,6 +23,10 @@ log = "0.4.20"
 chrono = "0.4.28"
 serde = {version = "1.0.188", features = ["derive"]}
 futures = "0.3.28"
+clap = {version = "4.4.6", features=["derive"]}
+env_logger = "0.10.0"
+eframe = "0.23.0"
+egui = "0.23.0"
 
 [build-dependencies]
 tonic-build = "0.9.2"
