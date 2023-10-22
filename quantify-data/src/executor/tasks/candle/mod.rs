@@ -127,7 +127,6 @@ impl TaskFactory for UpdateCandleDataTask {
                         retrieved_data.insert(timestamp, entry);
                     }
                 }
-                break;
             }
 
             let candle_data = retrieved_data.values().cloned().collect::<Vec<CandleData>>();
