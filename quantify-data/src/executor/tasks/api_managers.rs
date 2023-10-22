@@ -49,7 +49,7 @@
 //!     for manager in managers {
 //!         let res = manager.get_and_process_data();
 //!         if res.is_some() {
-//!             data.push(res);
+//!             data.push(res.unwrap());
 //!         }
 //!     }
 //!     ...
