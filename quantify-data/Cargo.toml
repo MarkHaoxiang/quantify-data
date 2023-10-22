@@ -24,6 +24,7 @@ chrono = "0.4.28"
 serde = {version = "1.0.188", features = ["derive"]}
 futures = "0.3.28"
 bson = {version = "2.7.0", features = ["chrono-0_4"]}
+async-trait = "0.1.74"
 
 [build-dependencies]
 tonic-build = "0.9.2"

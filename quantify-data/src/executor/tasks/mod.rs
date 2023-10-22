@@ -5,6 +5,7 @@ pub use add_ticker::AddTickerTask;
 mod candle;
 pub use candle::{UpdateCandleDataTask, Granularity};
 
+pub mod api_managers;
 
 /// This module provides utility functions to resolve
 /// discrepancies involving multiple data sources

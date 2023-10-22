@@ -1,12 +1,16 @@
 use std::sync::Arc;
+use std::collections::HashMap;
 
 use chrono::{DateTime, Utc, offset::Local, Duration};
 use futures::TryStreamExt;
 use mongodb::{Database, options::FindOptions, bson::doc};
-use polygon::{PolygonRESTClient, Interval, DEFAULT_POLYGON_MAX_HISTORICAL_WEEKS};
+use polygon::DEFAULT_POLYGON_MAX_HISTORICAL_WEEKS;
 use serde::{Serialize, Deserialize};
 
-use crate::executor::{Executor, Task, TaskFactory};
+use crate::executor::{Executor, Task, TaskFactory, tasks::api_managers::get_managers_in_priority};
+
+// Rexporting for executor::tasks::data_managers.rs
+pub mod aggregate_data_interface;
 
 // MongoDB constants
 const DAY_CANDLE_COLLECTION: &str = "day_candle";
@@ -22,7 +26,7 @@ pub enum Granularity {
 
 // Definitions
 #[derive(Debug, Serialize, Deserialize, Clone)]
-struct CandleData {
+pub struct CandleData {
     ticker: String,
     #[serde(with = "bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     timestamp: DateTime<Utc>, // MongoDB requires a "valid BSON UTC datetime value"
@@ -66,9 +70,6 @@ impl UpdateCandleDataTask {
 impl TaskFactory for UpdateCandleDataTask {
     fn init (this: Arc<Self>, _executor: Arc<Executor>, db_ref: Database, client: reqwest::Client) -> Task {
         Box::new(async move {
-            // Initialize clients
-            let polygon_client = PolygonRESTClient::new(client);
-
             // Get collection handle and granularity
             let col_name = match this.granularity {
                 Granularity::Days(_) => DAY_CANDLE_COLLECTION,
@@ -100,40 +101,36 @@ impl TaskFactory for UpdateCandleDataTask {
                 None => default_start_date.unwrap()
             };
 
-            // Retrieve from PolygonIO
             let end_date = &Local::now().date_naive();
-            let interval = &match this.granularity {
-                Granularity::Days(m) => Interval::Days(m),
-                Granularity::Hours(m) => Interval::Hours(m),
-                Granularity::Minutes(m) => Interval::Minutes(m)
-            };
-            let adjusted = &false;
-            let agg_data = polygon_client.get_aggs(
-                this.ticker.as_str(),
-                start_date,
-                end_date,
-                interval,
-                adjusted).await?;
 
-            // Convert PolygonIO Aggregate Data into Candle Data
-            let mut candle_data: Vec<CandleData> = Vec::new();
-            for agg in &agg_data {
-                if data_result.is_some() {
-                    if agg.datetime.timestamp() <= data_result.as_ref().unwrap().timestamp.timestamp() {
-                        continue;
+            let managers = get_managers_in_priority(client.clone());
+            let mut retrieved_data: HashMap<i64, CandleData> = HashMap::new(); // HashMap<timestamp as i64, CandleData>
+            for manager  in managers {
+                // Get data from manager
+                let res = manager.get_agg_candle_data(
+                    this.ticker.as_str(),
+                    start_date,
+                    end_date,
+                    &this.granularity,
+                ).await?;
+
+                for entry in res {
+                    let timestamp = entry.timestamp.timestamp();
+                    if data_result.is_some() {
+                        if timestamp <= data_result.as_ref().unwrap().timestamp.timestamp() {
+                            continue;
+                        }
+                    }
+
+                    // If the timestamp does not yet exist in the data HashMap (e.g. due to missing data from a higher-priority source), insert it
+                    if !retrieved_data.contains_key(&timestamp) {
+                        retrieved_data.insert(timestamp, entry);
                     }
                 }
-                candle_data.push(CandleData {
-                    ticker: this.ticker.clone(),
-                    timestamp: agg.datetime,
-                    open: agg.open,
-                    close: agg.close,
-                    high: agg.high,
-                    low: agg.low,
-                    volume: agg.volume as i64,
-                    num_transactions: agg.num_transactions as i64
-                });
+                break;
             }
+
+            let candle_data = retrieved_data.values().cloned().collect::<Vec<CandleData>>();
 
             if candle_data.len() <= 0 {
                 // Everything is up-to-date or there is no data to be retrieved from the server
