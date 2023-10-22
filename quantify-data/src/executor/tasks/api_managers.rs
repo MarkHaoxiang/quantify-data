@@ -9,7 +9,7 @@
 //! 1. Create a trait
 //! 2. Implement the trait for each Manager
 //! 3. Import the trait to this file and add it to the APIManager trait as a supertrait.
-//! 4. Call `APIManagers::get_managers_in_priority(web_client)` to obtain list of managers in order of priority
+//! 4. Call `get_managers_in_priority(web_client)` to obtain list of managers in order of priority
 //! 5. Loop through
 //! 
 //! # Examples
